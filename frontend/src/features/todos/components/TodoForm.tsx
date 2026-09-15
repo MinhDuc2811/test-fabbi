@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ export function TodoForm({ mode, todo, open, onClose }: TodoFormProps) {
   const attachTag = useAttachTag();
   const detachTag = useDetachTag();
   const { data: allTags } = useTags();
+  const [pendingTagIds, setPendingTagIds] = useState<string[]>([]);
 
   const {
     register,
@@ -45,8 +47,12 @@ export function TodoForm({ mode, todo, open, onClose }: TodoFormProps) {
   const onSubmit = (data: TodoFormData) => {
     if (mode === "create") {
       createTodo.mutate(data, {
-        onSuccess: () => {
+        onSuccess: (newTodo) => {
+          pendingTagIds.forEach((tagId) => {
+            attachTag.mutate({ todoId: newTodo.id, tagId });
+          });
           reset();
+          setPendingTagIds([]);
           onClose();
         },
       });
@@ -64,8 +70,13 @@ export function TodoForm({ mode, todo, open, onClose }: TodoFormProps) {
 
   const isPending = createTodo.isPending || updateTodo.isPending;
 
+  const handleClose = () => {
+    setPendingTagIds([]);
+    onClose();
+  };
+
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
@@ -102,42 +113,51 @@ export function TodoForm({ mode, todo, open, onClose }: TodoFormProps) {
             )}
           </div>
 
-          {mode === "edit" && todo && (
-            <div className="space-y-2">
-              <Label>Tags</Label>
-              {allTags?.length === 0 && (
-                <p className="text-xs text-muted-foreground">
-                  No tags yet - create one from Manage Tags first.
-                </p>
-              )}
-              <div className="flex flex-wrap gap-1.5">
-                {allTags?.map((tag) => {
-                  const isAttached = todo.tags.some((t) => t.id === tag.id);
-                  return (
-                    <button
-                      key={tag.id}
-                      type="button"
-                      disabled={attachTag.isPending || detachTag.isPending}
-                      onClick={() =>
-                        isAttached
-                          ? detachTag.mutate({ todoId: todo.id, tagId: tag.id })
-                          : attachTag.mutate({ todoId: todo.id, tagId: tag.id })
+          <div className="space-y-2">
+            <Label>Tags</Label>
+            {allTags?.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                No tags yet - create one from Manage Tags first.
+              </p>
+            )}
+            <div className="flex flex-wrap gap-1.5">
+              {allTags?.map((tag) => {
+                const isAttached =
+                  mode === "edit" && todo
+                    ? todo.tags.some((t) => t.id === tag.id)
+                    : pendingTagIds.includes(tag.id);
+                return (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    disabled={attachTag.isPending || detachTag.isPending}
+                    onClick={() => {
+                      if (mode === "edit" && todo) {
+                        if (isAttached) {
+                          detachTag.mutate({ todoId: todo.id, tagId: tag.id });
+                        } else {
+                          attachTag.mutate({ todoId: todo.id, tagId: tag.id });
+                        }
+                      } else {
+                        setPendingTagIds((prev) =>
+                          isAttached ? prev.filter((id) => id !== tag.id) : [...prev, tag.id]
+                        );
                       }
-                      className={isAttached ? "" : "opacity-40 hover:opacity-100"}
-                    >
-                      <TagBadge tag={tag} />
-                    </button>
-                  );
-                })}
-              </div>
+                    }}
+                    className={isAttached ? "" : "opacity-40 hover:opacity-100"}
+                  >
+                    <TagBadge tag={tag} />
+                  </button>
+                );
+              })}
             </div>
-          )}
+          </div>
 
           <div className="flex justify-end gap-2">
             <Button
               type="button"
               variant="outline"
-              onClick={onClose}
+              onClick={handleClose}
             >
               Cancel
             </Button>
