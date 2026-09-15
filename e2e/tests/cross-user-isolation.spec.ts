@@ -72,6 +72,10 @@ test("cross-user isolation persists after logout/login on the same browser", asy
   // cache on logout, this can briefly render user A's cached todo list.
   const emailB = uniqueEmail("same-browser-b");
   await page.getByRole("link", { name: "Sign up" }).click();
+  // Wait for the client-side route transition to finish before filling the
+  // form - filling immediately after click() can race the React Router
+  // navigation and land on the about-to-unmount /login page's field.
+  await expect(page).toHaveURL(/\/register$/);
   await page.getByLabel("Email").fill(emailB);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByLabel("Confirm Password").fill(password);
