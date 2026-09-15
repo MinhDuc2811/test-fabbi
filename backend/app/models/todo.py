@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -15,6 +15,9 @@ class Todo(Base):
     """Todo model."""
 
     __tablename__ = "todos"
+    __table_args__ = (
+        Index("ix_todos_user_id_completed_created_at", "user_id", "completed", "created_at"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         primary_key=True,
