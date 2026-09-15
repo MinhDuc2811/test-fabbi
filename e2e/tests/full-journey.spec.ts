@@ -28,20 +28,23 @@ test("full user journey: register -> create todo -> toggle -> verify -> logout",
 
   await expect(page.getByText(todoTitle)).toBeVisible();
 
-  // The checkbox is associated with the todo title via <label htmlFor>.
-  const checkbox = page.getByLabel(todoTitle);
+  // The completion checkbox is associated with the todo title via
+  // <label htmlFor>; exact:true is required to disambiguate it from the
+  // Tier 4 bulk-select checkbox, whose aria-label ("Select <title>") also
+  // contains the title as a substring.
+  const checkbox = page.getByLabel(todoTitle, { exact: true });
 
   // Toggle completion on -> off, verify it persists both ways (partial-update/
   // falsy-boolean bug: a naive fix would drop the "uncheck" transition).
   await checkbox.click();
   await expect(checkbox).toBeChecked();
   await page.reload();
-  await expect(page.getByLabel(todoTitle)).toBeChecked();
+  await expect(page.getByLabel(todoTitle, { exact: true })).toBeChecked();
 
-  await page.getByLabel(todoTitle).click();
-  await expect(page.getByLabel(todoTitle)).not.toBeChecked();
+  await page.getByLabel(todoTitle, { exact: true }).click();
+  await expect(page.getByLabel(todoTitle, { exact: true })).not.toBeChecked();
   await page.reload();
-  await expect(page.getByLabel(todoTitle)).not.toBeChecked();
+  await expect(page.getByLabel(todoTitle, { exact: true })).not.toBeChecked();
 
   // Logout
   await page.getByRole("button", { name: "Logout" }).click();
