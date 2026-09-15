@@ -10,7 +10,7 @@ from datetime import timedelta
 import pytest
 from httpx import AsyncClient
 
-from app.core.security import create_access_token
+from app.core.security import create_access_token, create_refresh_token
 
 
 async def register(client: AsyncClient, email: str, password: str = "password123") -> dict:
@@ -257,3 +257,18 @@ async def test_login_error_does_not_leak_user_existence(client: AsyncClient):
 
     assert wrong_password.status_code == unknown_email.status_code == 401
     assert wrong_password.json()["detail"] == unknown_email.json()["detail"]
+
+
+# --- Bug: /auth/refresh minted new tokens without checking the user still exists ---
+
+
+@pytest.mark.asyncio
+async def test_refresh_rejects_token_for_deleted_user(client: AsyncClient):
+    fake_user_id = "00000000-0000-0000-0000-000000000099"
+    forged_refresh_token = create_refresh_token(data={"sub": fake_user_id})
+
+    response = await client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": forged_refresh_token},
+    )
+    assert response.status_code == 401

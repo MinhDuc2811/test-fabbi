@@ -1,3 +1,5 @@
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +19,7 @@ from app.schemas.user import (
     UserCreate,
     UserResponse,
 )
-from app.services.auth_service import create_user, get_user_by_email
+from app.services.auth_service import create_user, get_user_by_email, get_user_by_id
 
 router = APIRouter()
 
@@ -87,6 +89,13 @@ async def refresh_token(
         )
 
     user_id = payload.get("sub")
+    user = await get_user_by_id(db, uuid.UUID(user_id)) if user_id else None
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+        )
+
     access_token = create_access_token(data={"sub": user_id})
     refresh_token = create_refresh_token(data={"sub": user_id})
 

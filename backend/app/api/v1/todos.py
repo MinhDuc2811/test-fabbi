@@ -2,7 +2,6 @@ import json
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_redis
@@ -61,22 +60,21 @@ async def list_todos(
 
     todos, total = await get_todos(db, user_id=current_user.id, skip=skip, limit=size)
 
-    items = []
-    for todo in todos:
-        user_result = await db.execute(select(User).where(User.id == todo.user_id))
-        user = user_result.scalar_one_or_none()
-        items.append(
-            TodoResponse(
-                id=todo.id,
-                title=todo.title,
-                description=todo.description,
-                completed=todo.completed,
-                user_id=todo.user_id,
-                created_at=todo.created_at,
-                updated_at=todo.updated_at,
-                user_email=user.email if user else None,
-            )
+    # get_todos already filters by current_user.id, so every todo in this
+    # page belongs to current_user - no need to look its email up again.
+    items = [
+        TodoResponse(
+            id=todo.id,
+            title=todo.title,
+            description=todo.description,
+            completed=todo.completed,
+            user_id=todo.user_id,
+            created_at=todo.created_at,
+            updated_at=todo.updated_at,
+            user_email=current_user.email,
         )
+        for todo in todos
+    ]
 
     response = TodoListResponse(
         items=items,
