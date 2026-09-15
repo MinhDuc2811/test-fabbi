@@ -23,6 +23,23 @@ router = APIRouter()
 CACHE_TTL = 300  # 5 minutes
 
 
+async def _todos_cache_key(redis: RedisClient, user_id: uuid.UUID, page: int, size: int) -> str:
+    """Build a per-user, per-page cache key that includes a version stamp.
+
+    Bumping the version (see invalidate_todos_cache) makes every previously
+    cached page/size for that user unreachable in one write, without needing
+    a Redis SCAN/pattern-delete to enumerate them.
+    """
+    version = await redis.get(f"todos:list-version:{user_id}") or "0"
+    return f"todos:list:{user_id}:{version}:{page}:{size}"
+
+
+async def invalidate_todos_cache(redis: RedisClient, user_id: uuid.UUID) -> None:
+    version_key = f"todos:list-version:{user_id}"
+    current_version = int(await redis.get(version_key) or "0")
+    await redis.set(version_key, str(current_version + 1))
+
+
 @router.get("", response_model=TodoListResponse)
 async def list_todos(
     page: int = Query(1, ge=1),
@@ -34,7 +51,7 @@ async def list_todos(
     """Get paginated list of todos."""
     skip = (page - 1) * size
 
-    cache_key = "todos:list"
+    cache_key = await _todos_cache_key(redis, current_user.id, page, size)
 
     # Try to get from cache
     cached = await redis.get(cache_key)
@@ -79,9 +96,11 @@ async def create_new_todo(
     todo_data: TodoCreate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    redis: RedisClient = Depends(get_redis),
 ):
     """Create a new todo item."""
     todo = await create_todo(db, todo_data, current_user.id)
+    await invalidate_todos_cache(redis, current_user.id)
     return todo
 
 
@@ -130,6 +149,7 @@ async def update_existing_todo(
         todo.description = update_data["description"]
 
     updated_todo = await update_todo(db, todo, {})
+    await invalidate_todos_cache(redis, current_user.id)
 
     return updated_todo
 
@@ -150,5 +170,6 @@ async def delete_existing_todo(
         )
 
     await delete_todo(db, todo)
+    await invalidate_todos_cache(redis, current_user.id)
 
     return None
