@@ -6,8 +6,10 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.tag import todo_tags
 
 if TYPE_CHECKING:
+    from app.models.tag import Tag
     from app.models.user import User
 
 
@@ -54,6 +56,15 @@ class Todo(Base):
         "User",
         back_populates="todos",
         lazy="select",
+    )
+    # lazy="selectin" (not the default "select") so that loading/refreshing a
+    # Todo also loads its tags via one batched follow-up query, run inside the
+    # same await - accessing a lazy="select" relationship outside of an
+    # active await is what breaks under async SQLAlchemy (MissingGreenlet).
+    tags: Mapped[list["Tag"]] = relationship(  # noqa: F821
+        "Tag",
+        secondary=todo_tags,
+        lazy="selectin",
     )
 
     def __repr__(self) -> str:
