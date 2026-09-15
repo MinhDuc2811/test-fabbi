@@ -9,9 +9,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useCreateTodo, useUpdateTodo } from "../api/todos";
+import { useCreateTodo, useUpdateTodo, useAttachTag, useDetachTag } from "../api/todos";
 import { todoSchema, type TodoFormData } from "../schemas/todo";
 import type { Todo } from "../api/todos";
+import { useTags } from "@/features/tags/api/tags";
+import { TagBadge } from "@/features/tags/components/TagBadge";
 
 interface TodoFormProps {
   mode: "create" | "edit";
@@ -23,6 +25,9 @@ interface TodoFormProps {
 export function TodoForm({ mode, todo, open, onClose }: TodoFormProps) {
   const createTodo = useCreateTodo();
   const updateTodo = useUpdateTodo();
+  const attachTag = useAttachTag();
+  const detachTag = useDetachTag();
+  const { data: allTags } = useTags();
 
   const {
     register,
@@ -96,6 +101,37 @@ export function TodoForm({ mode, todo, open, onClose }: TodoFormProps) {
               </p>
             )}
           </div>
+
+          {mode === "edit" && todo && (
+            <div className="space-y-2">
+              <Label>Tags</Label>
+              {allTags?.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  No tags yet - create one from Manage Tags first.
+                </p>
+              )}
+              <div className="flex flex-wrap gap-1.5">
+                {allTags?.map((tag) => {
+                  const isAttached = todo.tags.some((t) => t.id === tag.id);
+                  return (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      disabled={attachTag.isPending || detachTag.isPending}
+                      onClick={() =>
+                        isAttached
+                          ? detachTag.mutate({ todoId: todo.id, tagId: tag.id })
+                          : attachTag.mutate({ todoId: todo.id, tagId: tag.id })
+                      }
+                      className={isAttached ? "" : "opacity-40 hover:opacity-100"}
+                    >
+                      <TagBadge tag={tag} />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-end gap-2">
             <Button

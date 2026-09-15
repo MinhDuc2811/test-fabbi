@@ -1,17 +1,27 @@
 import { useState } from "react";
-import { Plus, LogOut } from "lucide-react";
+import { Plus, LogOut, Tag as TagIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { useTodos } from "../api/todos";
+import { useTodos, type TodoFilters } from "../api/todos";
 import { TodoList } from "./TodoList";
 import { TodoForm } from "./TodoForm";
+import { FilterBar } from "./FilterBar";
+import { BulkActionsBar } from "./BulkActionsBar";
+import { TagManager } from "@/features/tags/components/TagManager";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 
 export function TodoPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const { data, isLoading, error } = useTodos();
+  const [showTagManager, setShowTagManager] = useState(false);
+  const [filters, setFilters] = useState<TodoFilters>({});
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const { data, isLoading, error } = useTodos(filters);
   const { user, logout } = useAuth();
+
+  const handleSelectChange = (id: string, selected: boolean) => {
+    setSelectedIds((prev) => (selected ? [...prev, id] : prev.filter((x) => x !== id)));
+  };
 
   return (
     <div className="min-h-screen bg-muted/40">
@@ -24,10 +34,16 @@ export function TodoPage() {
               <p className="text-sm text-muted-foreground">{user.email}</p>
             )}
           </div>
-          <Button variant="ghost" size="sm" onClick={logout}>
-            <LogOut className="h-4 w-4 mr-2" />
-            Logout
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setShowTagManager(true)}>
+              <TagIcon className="h-4 w-4 mr-2" />
+              Manage Tags
+            </Button>
+            <Button variant="ghost" size="sm" onClick={logout}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Logout
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -43,6 +59,10 @@ export function TodoPage() {
           </CardHeader>
           <Separator />
           <CardContent className="pt-4">
+            <FilterBar filters={filters} onChange={setFilters} />
+
+            <BulkActionsBar selectedIds={selectedIds} onClear={() => setSelectedIds([])} />
+
             {isLoading && (
               <div className="text-center py-12 text-muted-foreground">
                 Loading todos...
@@ -55,7 +75,13 @@ export function TodoPage() {
               </div>
             )}
 
-            {data && <TodoList todos={data.items} />}
+            {data && (
+              <TodoList
+                todos={data.items}
+                selectedIds={selectedIds}
+                onSelectChange={handleSelectChange}
+              />
+            )}
 
             {data && data.total > 0 && (
               <div className="mt-4 text-center text-sm text-muted-foreground">
@@ -72,6 +98,8 @@ export function TodoPage() {
         open={showCreateForm}
         onClose={() => setShowCreateForm(false)}
       />
+
+      <TagManager open={showTagManager} onClose={() => setShowTagManager(false)} />
     </div>
   );
 }

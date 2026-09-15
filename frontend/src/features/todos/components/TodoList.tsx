@@ -6,9 +6,11 @@ import { useDeleteTodo, useToggleTodo } from "../api/todos";
 
 interface TodoListProps {
   todos: Todo[];
+  selectedIds?: string[];
+  onSelectChange?: (id: string, selected: boolean) => void;
 }
 
-export function TodoList({ todos }: TodoListProps) {
+export function TodoList({ todos, selectedIds, onSelectChange }: TodoListProps) {
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
   const deleteTodo = useDeleteTodo();
   const toggleTodo = useToggleTodo();
@@ -45,6 +47,10 @@ export function TodoList({ todos }: TodoListProps) {
             onToggle={handleToggle}
             onEdit={handleEdit}
             onDelete={handleDelete}
+            selected={selectedIds?.includes(todo.id)}
+            onSelectChange={
+              onSelectChange ? (selected) => onSelectChange(todo.id, selected) : undefined
+            }
           />
         ))}
       </div>
