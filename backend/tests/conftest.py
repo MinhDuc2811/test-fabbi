@@ -1,7 +1,6 @@
 import asyncio
 import os
 from collections.abc import AsyncGenerator
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -12,7 +11,6 @@ TEST_DATABASE_URL = "sqlite+aiosqlite:///./test.db"
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 
 from app.api.deps import get_redis
-from app.core.security import create_access_token
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
@@ -51,12 +49,38 @@ async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
             raise
 
 
+class FakeRedis:
+    """In-memory stand-in for RedisClient that actually stores data, so tests
+    can observe cache hits/misses and invalidation instead of every `get`
+    unconditionally returning None."""
+
+    def __init__(self):
+        self._store: dict[str, str] = {}
+
+    async def get(self, key: str) -> str | None:
+        return self._store.get(key)
+
+    async def set(self, key: str, value: str, ex: int | None = None) -> None:
+        self._store[key] = value
+
+    async def delete(self, key: str) -> None:
+        self._store.pop(key, None)
+
+    async def exists(self, key: str) -> bool:
+        return key in self._store
+
+
+fake_redis = FakeRedis()
+
+
 def override_get_redis():
-    mock_redis = MagicMock()
-    mock_redis.get = AsyncMock(return_value=None)
-    mock_redis.set = AsyncMock()
-    mock_redis.delete = AsyncMock()
-    return mock_redis
+    return fake_redis
+
+
+@pytest.fixture(autouse=True)
+def _reset_fake_redis():
+    fake_redis._store.clear()
+    yield
 
 
 app.dependency_overrides[get_db] = override_get_db
@@ -76,10 +100,3 @@ async def client() -> AsyncGenerator[AsyncClient, None]:
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
     async with test_session_maker() as session:
         yield session
-
-
-@pytest.fixture
-def auth_headers() -> dict:
-    """Create auth headers with a valid token for testing."""
-    token = create_access_token(data={"sub": "00000000-0000-0000-0000-000000000001"})
-    return {"Authorization": f"Bearer {token}"}
