@@ -1,5 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { queryClient } from "@/lib/queryClient";
 
 interface LoginRequest {
   email: string;
@@ -51,6 +52,7 @@ export function useLogout() {
     onSuccess: () => {
       localStorage.removeItem("access_token");
       localStorage.removeItem("refresh_token");
+      queryClient.clear();
     },
   });
 }

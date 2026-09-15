@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useLogout, fetchCurrentUser } from "../api/auth";
+import { queryClient } from "@/lib/queryClient";
 
 export function useAuth() {
   const navigate = useNavigate();
@@ -26,9 +27,10 @@ export function useAuth() {
         navigate("/login");
       },
       onError: () => {
-        // Even on error, clear local tokens and redirect
+        // Even on error, clear local tokens and cached data, then redirect
         localStorage.removeItem("access_token");
         localStorage.removeItem("refresh_token");
+        queryClient.clear();
         navigate("/login");
       },
     });
