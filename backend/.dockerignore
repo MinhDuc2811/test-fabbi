@@ -1,0 +1,13 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+test.db
+.git
+.gitignore
+.env
+.flake8
+tests/
+README.md
