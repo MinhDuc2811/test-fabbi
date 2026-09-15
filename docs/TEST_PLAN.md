@@ -6,8 +6,13 @@
   infra cold-boot) đã được sửa đúng, và không có hồi quy (regression) so với hành vi hợp lệ hiện có.
 - **Phạm vi kiểm thử**: Authentication & Token Handling, Todo CRUD, Authorization/Data Isolation,
   Caching, Frontend Session Handling, Docker Cold Boot.
-- **Ngoài phạm vi**: Tier 4 (tags/filter/bulk actions) - chưa triển khai; hiệu năng tải cao
-  (load/stress testing) ngoài các con số benchmark đã có ở `docs/DB_PERFORMANCE_BENCHMARK.md`.
+- **Cập nhật**: Tier 4 (tags, filter, bulk actions) đã triển khai thêm sau khi tài liệu này được
+  tạo — xem `backend/tests/test_tags.py` (13 test: tag CRUD, case-insensitive duplicate, cross-user
+  tag access, attach/detach ownership, filter theo status/tag/keyword, bulk-update ownership, cache
+  invalidation) và `e2e/tests/tags-and-filters.spec.ts` (tag manager, gắn tag, lọc, bulk actions -
+  verify bằng screenshot thật). Kết quả chi tiết ở mục Test Execution Log bên dưới.
+- **Ngoài phạm vi**: hiệu năng tải cao (load/stress testing) ngoài các con số benchmark đã có ở
+  `docs/DB_PERFORMANCE_BENCHMARK.md`.
 
 ## 2. Test Environment & Prerequisites
 
@@ -71,3 +76,8 @@
 | 2026-09-15 (full cold boot lại từ đầu: `docker compose down -v && up -d --build`) | Docker cold boot | `docker compose ps -a` | 4/4 service `healthy`, migration chain chạy đúng từ đầu (xác nhận composite index + unique constraint có mặt qua `\d todos`) | Xác nhận Tier 3B/3C hoạt động đúng trên volume hoàn toàn trống, không chỉ trên DB đã migrate sẵn từ trước. |
 | 2026-09-15 (Playwright ngay sau cold boot, DB trống 0 user) | Playwright E2E | `npx playwright test` | **2 passed, 1 failed** | `cross-user isolation persists after logout/login` fail: điền email ngay sau khi click link "Sign up" bị race với React Router client-side navigation, form bị remount làm mất giá trị đã điền → lỗi validate "Invalid email address". Đây là **lỗi trong chính test** (race condition), không phải bug app - đã sửa bằng cách đợi URL chuyển hẳn sang `/register` trước khi điền form. |
 | 2026-09-15 (sau khi sửa flaky test) | Playwright E2E | `npx playwright test` (chạy lặp lại 3 lần liên tiếp) | 3 passed, 0 failed cả 3 lần | Xác nhận fix ổn định, không còn flake. |
+| 2026-09-15 (Tier 4 backend, TDD cho tag CRUD/filter/bulk/attach) | Backend pytest | `pytest tests/test_tags.py -v` | 12 passed, 1 failed lần đầu | `test_duplicate_tag_name_case_insensitive_rejected` fail vì functional unique index (`lower(name)`) lúc đó mới khai báo trong migration, chưa có trong model nên SQLite test DB không tạo constraint này. Sửa: khai báo `Index(..., func.lower(...))` ở cấp module ngay trong `app/models/tag.py` để cả `Base.metadata.create_all()` (SQLite) lẫn Alembic autogenerate (Postgres) đều thấy cùng 1 index. |
+| 2026-09-15 (Tier 4 backend, sau khi sửa) | Backend pytest | `pytest tests/ -q` | 35 passed, 0 failed | 22 test cũ (Tier 1-3) + 13 test Tier 4 đều xanh. `flake8 app/ tests/test_tags.py` sạch. |
+| 2026-09-15 (Tier 4, migration thật trên Postgres đã seed) | Alembic | `alembic revision --autogenerate` rồi `alembic upgrade head` | Migration tự sinh đúng cả bảng `tags`/`todo_tags` lẫn functional index `lower(name)`, áp dụng thành công, không ảnh hưởng dữ liệu `users`/`todos` hiện có | Xác nhận qua `\d tags`, `\d todo_tags` sau khi upgrade. |
+| 2026-09-15 (Tier 4 frontend, kiểm tra bằng Playwright thật trên Docker) | Playwright E2E | `npx playwright test tags-and-filters` | Fail 3 lần đầu, pass lần 4 | 3 lần fail đầu đều do **lỗi trong test** (không phải app): (1) `getByText("Urgent")` không scope vào đúng dialog nên đụng cả `<option>` trong FilterBar, (2) chọn nhầm dòng todo để gắn tag vì `hasText: "Tagged todo"` khớp cả substring của "Untagged todo" (case-insensitive), khiến tag bị gắn nhầm todo - xác nhận qua screenshot. Sau khi đổi tên todo test thành "Alpha"/"Beta" (không trùng substring) và scope lại locator theo `div.group`, test pass và ảnh chụp xác nhận đúng: tag hiển thị trên đúng todo, lọc theo tag chỉ còn 1 kết quả, bulk-select 2 todo + "Mark complete" hoạt động đúng. |
+| 2026-09-15 (Tier 4 frontend, full E2E suite) | Playwright E2E | `npx playwright test` (chạy lặp lại 3 lần) | 4 passed, 0 failed cả 3 lần | Trước đó có 1 lần fail ở `full-journey.spec.ts` do `getByLabel(todoTitle)` (không exact) đụng luôn `aria-label="Select <title>"` của checkbox chọn nhiều mới thêm ở Tier 4 - đã sửa test cũ thêm `{ exact: true }`. Sau khi sửa, ổn định 3/3 lần chạy song song 4 file spec. |
